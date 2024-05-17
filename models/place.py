@@ -3,6 +3,7 @@
 from models.base_model import BaseModel, Base
 from sqlalchemy import Column, String, Integer, Float, ForeignKey, Table
 from sqlalchemy.orm import relationship
+from os import getenv
 
 # Create the table to establish a Many-to-Many
 # relationship between Place and Amenity
@@ -50,38 +51,37 @@ class Place(BaseModel, Base):
 
     amenity_ids = []
 
-
     amenities = relationship(
         "Amenity",
         secondary=place_amenity,
-        back_populates='place_amenities',
+        back_populates='place',
         viewonly=False
     )
 
+    if getenv("HBNB_TYPE_STORAGE") != "db":
+        @property
+        def amenities(self):
+            """Return the list of Amenity instances
+            based on the amenity_ids list."""
+            from models import storage
 
-    @property
-    def amenities(self):
-        """Return the list of Amenity instances
-        based on the amenity_ids list."""
-        from models import storage
+            from models.amenity import Amenity
 
-        from models.amenity import Amenity
+            all_amenities = storage.all(Amenity)
+            amenities_list = list(
+                map(lambda id: all_amenities[f"Amenity.{id}"], self.amenity_ids)
+            )
+            return amenities_list
 
-        all_amenities = storage.all(Amenity)
-        amenities_list = list(
-            map(lambda id: all_amenities[f"Amenity.{id}"], self.amenity_ids)
-        )
-        return amenities_list
+        @amenities.setter
+        def amenities(self, obj):
+            """Add an Amenity instance to the list of amenities."""
+            from models.amenity import Amenity
 
-    @amenities.setter
-    def append(self, obj):
-        """Add an Amenity instance to the list of amenities."""
-        from models.amenity import Amenity
+            if not isinstance(obj, Amenity):
+                return
 
-        if not isinstance(obj, Amenity):
-            return
+            if obj.id in self.amenity_ids:
+                return
 
-        if obj.id in self.amenity_ids:
-            return
-
-        self.amenity_ids.append(obj.id)
+            self.amenity_ids.append(obj.id)
